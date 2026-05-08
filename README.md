@@ -1,4 +1,4 @@
-# HelloAgents 智能旅行规划助手 🌍✈️
+# LangChain + LangGraph 多智能体旅行规划系统 🌍✈️
 
 基于 **LangChain 1.2 + LangGraph 1.1** 构建的智能旅行规划系统，采用多 Agent 协作架构，支持对话驱动的行程规划与智能调整。
 
@@ -7,7 +7,7 @@
 ## ✨ 核心功能
 
 ### 1. 智能行程规划
-- **多 Agent 并行协作**：父 Agent 统筹调度，6 个专业子 Agent（景点/天气/酒店/交通/美食/预算）并行执行
+- **多 Agent 并行协作**：父 Agent 统筹调度，6 个专业子 Agent（景点/天气/酒店/交通/美食/地图）并行执行
 - **Plan-Execute-Replan 工作流**：LangGraph 驱动的三阶段循环，支持任务分解→并行执行→结果整合
 - **真实数据支撑**：集成高德地图 API，获取实时景点、天气、酒店信息
 
@@ -55,12 +55,15 @@
 ## 📁 项目结构
 
 ```
-helloagents-trip-planner/
+.
 ├── backend/                        # 后端服务
 │   ├── app/
 │   │   ├── agents/                 # 多智能体实现
 │   │   │   ├── agents.py           # Agent 定义与创建
 │   │   │   ├── tools.py            # 工具函数（高德 API 集成）
+│   │   │   ├── nodes.py            # 工作流节点函数
+│   │   │   ├── state.py            # 状态定义和缓存系统
+│   │   │   ├── react_agent.py      # ReAct 智能体
 │   │   │   └── trip_planner_langgraph.py  # LangGraph 工作流编排
 │   │   ├── api/
 │   │   │   ├── main.py             # FastAPI 应用入口
@@ -69,13 +72,18 @@ helloagents-trip-planner/
 │   │   │       ├── chat.py         # 智能对话 API
 │   │   │       └── poi.py          # POI 相关 API
 │   │   ├── mcp/                    # MCP 客户端
-│   │   │   └── client.py           # MCP 协议实现
+│   │   │   ├── client.py           # MCP 协议实现
+│   │   │   └── cache.py            # MCP 缓存系统
 │   │   ├── memory/
 │   │   │   └── compressor.py       # 消息压缩器
 │   │   └── services/
-│   │       └── redis_session.py    # Redis 会话管理
+│   │       ├── observability.py    # 可观测性监控
+│   │       ├── redis_session.py    # Redis 会话管理
+│   │       └── unsplash_service.py # 图片服务
+│   ├── tests/                      # 单元测试
+│   ├── Dockerfile                  # 后端 Docker 镜像
 │   ├── requirements.txt
-│   └── .env.example
+│   └── run.py
 ├── frontend/                       # 前端应用
 │   ├── src/
 │   │   ├── components/
@@ -86,7 +94,13 @@ helloagents-trip-planner/
 │   │   │   ├── Home.vue            # 首页
 │   │   │   └── Result.vue          # 结果页
 │   │   └── App.vue
+│   ├── Dockerfile                  # 前端 Docker 镜像
+│   ├── nginx.conf                  # Nginx 配置
 │   └── package.json
+├── docker-compose.yml              # Docker Compose 编排
+├── deploy.sh                       # Linux/Mac 部署脚本
+├── deploy.ps1                      # Windows 部署脚本
+├── DEPLOY.md                       # 部署文档
 └── README.md
 ```
 
@@ -94,126 +108,87 @@ helloagents-trip-planner/
 
 ## 🚀 快速开始
 
-### 环境要求
-- Python 3.10+
-- Node.js 18+
-- Redis（可选，用于会话持久化）
+### 方式一：Docker 部署（推荐）
 
-### 1. 克隆项目
+#### 环境要求
+- Docker
+- Docker Compose
+
+#### 部署步骤
+
+1. **配置环境变量**
 ```bash
-git clone <repository-url>
-cd helloagents-trip-planner
+cp .env.example .env
+# 编辑 .env 填入你的 API Key
 ```
 
-### 2. 后端配置
+2. **执行部署**
+```bash
+# Linux/Mac
+chmod +x deploy.sh
+./deploy.sh
+
+# Windows
+.\deploy.ps1
+```
+
+或手动：
+```bash
+docker-compose up -d
+```
+
+3. **访问服务**
+- 前端界面: http://localhost
+- 后端API: http://localhost:8000
+- API文档: http://localhost:8000/docs
+
+### 方式二：本地开发
+
+#### 后端
 ```bash
 cd backend
-
-# 创建虚拟环境
 python -m venv venv
-venv\Scripts\activate  # Windows
-# source venv/bin/activate  # Mac/Linux
-
-# 安装依赖
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-# 配置环境变量
-cp .env.example .env
-# 编辑 .env，填入：
-# - LLM_API_KEY（DeepSeek/OpenAI/通义千问）
-# - AMAP_API_KEY（高德地图 Web 服务 Key）
-
-# 启动服务
-python -m uvicorn app.api.main:app --host 127.0.0.1 --port 8000
+python run.py
 ```
 
-### 3. 前端配置
+#### 前端
 ```bash
 cd frontend
-
-# 安装依赖
 npm install
-
-# 配置环境变量
-cp .env.example .env
-# 编辑 .env，填入：
-# - VITE_AMAP_JS_KEY（高德地图 JS API Key）
-
-# 启动开发服务器
 npm run dev
 ```
 
-### 4. 访问应用
-打开浏览器访问 `http://localhost:5173`
+---
+
+## ⚙️ 配置说明
+
+### 必需配置
+| 配置项 | 说明 | 获取地址 |
+|--------|------|----------|
+| `AMAP_API_KEY` | 高德地图 API Key | https://lbs.amap.com |
+| `LLM_API_KEY` | 大模型 API Key | DeepSeek/OpenAI/智谱AI |
+| `LLM_BASE_URL` | 大模型 API 地址 | 根据服务商填写 |
+
+### 可选配置
+| 配置项 | 说明 |
+|--------|------|
+| `UNSPLASH_ACCESS_KEY` | Unsplash 图片 API |
+| `REDIS_URL` | Redis 连接地址 |
 
 ---
 
-## � 使用指南
+## 🧪 运行测试
 
-### 创建旅行计划
-1. **填写表单**：输入目的地、日期、偏好等信息
-2. **对话辅助**：通过智能助手快速填写（如"我想去西安，喜欢历史"）
-3. **生成计划**：点击生成或说"帮我规划"
-4. **查看结果**：浏览每日行程、地图、预算明细
-
-### 调整行程
-- 在结果页与智能助手对话
-- 示例指令：
-  - "景点太多了，每天减少一些"
-  - "换一家更便宜的酒店"
-  - "全部要最贵的配置"
-
----
-
-## 🔧 核心架构
-
-### LangGraph 工作流
-```
-用户请求
-    ↓
-[Plan 节点] → 分析需求、分解任务
-    ↓
-[Execute 节点组] → 6 个 Agent 并行执行
-    ↓
-[Replan 节点] → 整合结果、生成行程
-    ↓
-旅行计划输出
+```bash
+cd backend
+python -m pytest tests/ -v
 ```
 
-### 多 Agent 协作
-| Agent | 职责 | 工具 |
-|-------|------|------|
-| 景点 Agent | 搜索景点信息 | `search_attractions` |
-| 天气 Agent | 获取天气预报 | `get_weather` |
-| 酒店 Agent | 搜索酒店 | `search_hotels` |
-| 交通 Agent | 路线规划 | `get_route` |
-| 美食 Agent | 搜索餐厅 | `search_food` |
-| 预算 Agent | 费用估算 | `calculate_budget` |
-
 ---
 
-## 🎯 技术亮点
-
-1. **Agent 架构设计**：父 Agent + 子 Agent 分层协作，支持复杂任务分解
-2. **意图识别**：基于 LLM 的意图分类，实现对话驱动的产品功能
-3. **工作流编排**：LangGraph 状态机管理 Plan-Execute-Replan 循环
-4. **工程实践**：缓存、降级、压缩、会话管理等生产级优化
-
----
-
-## 📝 面试相关
-
-这个项目适合投递：
-- **AI 应用工程师**
-- **Python 后端开发**
-- **Agent 开发工程师**
-- **LLM 应用开发**
-
-核心技术点：LangChain、LangGraph、多 Agent 协作、ReAct 推理、意图识别
-
----
-
-## 📄 License
+## 📄 许可证
 
 MIT License
 
@@ -221,4 +196,4 @@ MIT License
 
 ## 🤝 贡献
 
-欢迎提交 Issue 和 PR！
+欢迎提交 Issue 和 Pull Request！
