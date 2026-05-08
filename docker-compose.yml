@@ -1,0 +1,48 @@
+services:
+  backend:
+    build: ./backend
+    container_name: trip-planner-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - AMAP_API_KEY=${AMAP_API_KEY}
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_BASE_URL=${LLM_BASE_URL}
+      - LLM_MODEL_ID=${LLM_MODEL_ID}
+      - UNSPLASH_ACCESS_KEY=${UNSPLASH_ACCESS_KEY}
+      - REDIS_URL=${REDIS_URL}
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./backend/logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - trip-planner-network
+
+  frontend:
+    build: ./frontend
+    container_name: trip-planner-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - trip-planner-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: trip-planner-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - trip-planner-network
+
+networks:
+  trip-planner-network:
+    driver: bridge
+
+volumes:
+  redis-data:
